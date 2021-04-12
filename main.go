@@ -1,0 +1,231 @@
+package main
+
+import (
+	"fmt"
+	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"sif/maven"
+	"sif/models"
+	"strings"
+)
+
+var (
+	rootCmd = &cobra.Command{
+		Use:   "sif",
+		Short: "A dependency analyzer for software projects",
+	}
+	rootCtx  = models.RootCtx{}
+	mavenCtx = maven.Maven{}
+)
+
+type AnalyzedDependency struct {
+	Dependency *models.Dependency
+	Parent     *AnalyzedDependency
+	Children   *[]AnalyzedDependency
+	Depth      int
+	TotalSize  uint64
+}
+type DependencyStack []*AnalyzedDependency
+
+func (s DependencyStack) Push(v *AnalyzedDependency) DependencyStack {
+	return append(s, v)
+}
+
+func (s DependencyStack) Pop() (DependencyStack, *AnalyzedDependency) {
+	l := len(s)
+	return s[:l-1], s[l-1]
+}
+
+func processRootConfig() models.RootCtx {
+	b, err := humanize.ParseBytes(rootCtx.LargeDependencyThreshold)
+	if err != nil {
+		log.Fatalf("Unable to parse threshold %s as a size", rootCtx.LargeDependencyThreshold)
+	}
+	rootCtx.LargeDependencyThresholdBytes = b
+
+	switch strings.ToUpper(rootCtx.LogLevel) {
+	case "TRACE":
+		log.SetLevel(log.TraceLevel)
+		rootCtx.LogLevel = "TRACE"
+		break
+	case "DEBUG":
+		log.SetLevel(log.DebugLevel)
+		rootCtx.LogLevel = "DEBUG"
+		break
+	case "INFO":
+		log.SetLevel(log.InfoLevel)
+		rootCtx.LogLevel = "INFO"
+	default:
+		log.Fatalf("Unknown log level: %s", rootCtx.LogLevel)
+	}
+	return rootCtx
+}
+
+func init() {
+	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVarP(&rootCtx.LargeDependencyThreshold,
+		"threshold-large",
+		"",
+		"3MB",
+		"The location of the Maven repository to use")
+	rootCmd.PersistentFlags().StringVarP(&rootCtx.LogLevel,
+		"logging",
+		"",
+		"INFO",
+		"The level of logging to use")
+
+	var mavenCmd = cobra.Command{
+		Use:   "maven [options] path/to/pom.xml",
+		Short: "Analyzes a Maven project's dependencies",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) != 1 {
+				cmd.Help()
+			} else {
+				mavenCtx.PomFile = args[0]
+				mavenCtx.RootCtx = processRootConfig()
+				printResult(mavenCtx.Analyze())
+			}
+		},
+	}
+	mavenCmd.PersistentFlags().StringVarP(&mavenCtx.MavenCommand,
+		"cmd",
+		"",
+		"mvn",
+		"Path to Maven command")
+	mavenCmd.PersistentFlags().StringVarP(&mavenCtx.Scope,
+		"scope",
+		"",
+		"compile",
+		"The project scope to use")
+	mavenCmd.PersistentFlags().StringVarP(&mavenCtx.MavenRepo,
+		"repo",
+		"",
+		"~/.m2/repository",
+		"The location of the Maven repository to use")
+	rootCmd.AddCommand(&mavenCmd)
+}
+
+func initConfig() {
+}
+
+func calculateTotalSizes(project models.Project) []AnalyzedDependency {
+	// Convert top-level deps into analyzed form
+	var deps []AnalyzedDependency
+	for _, e := range project.Dependencies {
+		var dep = e
+		deps = append(deps, AnalyzedDependency{
+			Dependency: &dep,
+			Parent:     nil,
+			Depth:      0,
+			TotalSize:  0,
+		})
+	}
+
+	// Push all top-level deps
+	var stack DependencyStack
+	for i := len(deps) - 1; i >= 0; i-- {
+		stack = stack.Push(&deps[i])
+	}
+
+	for len(stack) > 0 {
+		var entry *AnalyzedDependency
+		stack, entry = stack.Pop()
+
+		var childDeps []AnalyzedDependency
+		for i := 0; i < len(entry.Dependency.Children); i++ {
+			e := entry.Dependency.Children[i]
+			childDeps = append(childDeps, AnalyzedDependency{
+				Dependency: &e,
+				Parent:     entry,
+				Depth:      entry.Depth + 1,
+				TotalSize:  0,
+			})
+		}
+		for i := len(childDeps) - 1; i >= 0; i-- {
+			stack = stack.Push(&childDeps[i])
+		}
+		entry.Children = &childDeps
+
+		dep := entry.Dependency
+		ptr := entry
+		for ptr != nil {
+			ptr.TotalSize += dep.Size
+			ptr = ptr.Parent
+		}
+	}
+	return deps
+}
+
+func printResult(project models.Project) {
+	log.Infof("Project: %s (%s)", project.Name, project.Version)
+
+	if len(project.Dependencies) > 0 {
+		// Depth-first stack walk, printing as we go
+		analyzedDeps := calculateTotalSizes(project)
+		var stack DependencyStack
+		for i := len(analyzedDeps) - 1; i >= 0; i-- {
+			stack = stack.Push(&analyzedDeps[i])
+		}
+
+		topLevelCount := 0
+		for len(stack) > 0 {
+			var entry *AnalyzedDependency
+			stack, entry = stack.Pop()
+			dep := entry.Dependency
+
+			prefix := "├── "
+			if entry.Depth > 0 {
+				if len(stack) > 0 && stack[len(stack)-1].Depth == entry.Depth {
+					prefix = fmt.Sprintf("%s├── ", strings.Repeat("|    ", entry.Depth))
+				} else {
+					prefix = fmt.Sprintf("%s└── ", strings.Repeat("|    ", entry.Depth))
+				}
+			} else {
+				topLevelCount++
+				if len(stack) == 0 && len(*entry.Children) == 0 {
+					prefix = "└── "
+				}
+			}
+
+			jarColor := color.New(color.Reset)
+			totalColor := color.New(color.Reset)
+			if dep.Size > rootCtx.LargeDependencyThresholdBytes {
+				jarColor = color.New(color.BgRed)
+			}
+			if entry.TotalSize > rootCtx.LargeDependencyThresholdBytes {
+				totalColor = color.New(color.BgRed)
+			}
+
+			log.Infof("%s%s:%s:%s Size[%s, %s]",
+				prefix,
+				dep.GroupId,
+				dep.ArtifactId,
+				dep.Version,
+				jarColor.Sprintf("JAR: %s", humanize.Bytes(dep.Size)),
+				totalColor.Sprintf("Total: %s", humanize.Bytes(entry.TotalSize)))
+
+			for i := len(*entry.Children) - 1; i >= 0; i-- {
+				stack = stack.Push(&(*(*entry).Children)[i])
+			}
+		}
+	}
+}
+
+type LogFormatter struct {
+}
+
+func (*LogFormatter) Format(entry *log.Entry) ([]byte, error) {
+	if entry.Level >= log.DebugLevel {
+		return []byte(color.New(color.FgWhite).Sprintf("%s\n", entry.Message)), nil
+	} else {
+		return []byte(color.New(color.Reset).Sprintf("%s\n", entry.Message)), nil
+	}
+}
+
+func main() {
+	log.SetFormatter(&LogFormatter{})
+	rootCmd.Execute()
+}
