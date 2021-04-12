@@ -1,0 +1,7 @@
+git:
+  commitMessage: "Release of v${version}"
+  requireCleanWorkingDir: false
+github:
+  release: true
+  assets:
+    - dist/sif-*
