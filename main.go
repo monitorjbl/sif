@@ -14,9 +14,11 @@ import (
 )
 
 var (
+	Version = "localdev"
 	rootCmd = &cobra.Command{
-		Use:   "sif",
-		Short: "A dependency analyzer for software projects",
+		Use:     "sif",
+		Short:   "A dependency analyzer for software projects",
+		Version: Version,
 	}
 	rootCtx  = models.RootCtx{}
 	mavenCtx = maven.Maven{}
