@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
@@ -16,7 +15,7 @@ import (
 
 var (
 	regexProjectDetails    = regexp.MustCompile("\\[INFO\\] Building ([^\\s]+) ([^\\s]+)")
-	regexErrNonreadablepom = regexp.MustCompile(".* Non-readable POM.*")
+	regexErrNonreadablePom = regexp.MustCompile(".* Non-readable POM.*")
 	dependencyRegex        = regexp.MustCompile("(\\|\\s\\s)*(\\+-|\\\\-) (.+)")
 )
 
@@ -26,12 +25,12 @@ type Maven struct {
 	Scope        string
 	MavenCommand string
 	MavenRepo    string
+	ChildModule  string
 }
 
 func (m *Maven) describeError(errMsg string) {
 	log.Tracef("Error message: %s", errMsg)
-
-	if regexErrNonreadablepom.MatchString(errMsg) {
+	if regexErrNonreadablePom.MatchString(errMsg) {
 		log.Fatalf("POM was not found at %s", m.PomFile)
 	} else {
 		log.Fatalf("Unknown error encountered: %s", errMsg)
@@ -40,19 +39,20 @@ func (m *Maven) describeError(errMsg string) {
 
 func (m *Maven) determineFileSize(dep *models.Dependency) models.Dependency {
 	groupPath := strings.ReplaceAll(dep.GroupId, ".", "/")
-	file, _ := homedir.Expand(fmt.Sprintf("%s/%s/%s/%s/%s-%s.%s",
+	file := fmt.Sprintf("%s/%s/%s/%s/%s-%s.%s",
 		m.MavenRepo,
 		groupPath,
 		dep.ArtifactId,
 		dep.Version,
 		dep.ArtifactId,
 		dep.Version,
-		dep.Extension))
+		dep.Extension)
 	stats, err := os.Stat(file)
 	if err != nil {
-		log.Fatalf("Failed to read file at %s", file)
+		dep.Size = 0
+	} else {
+		dep.Size = uint64(stats.Size())
 	}
-	dep.Size = uint64(stats.Size())
 	return *dep
 }
 
@@ -140,9 +140,31 @@ func (m *Maven) Analyze() models.Project {
 		log.Debug("Logging Maven command output")
 	}
 
+	var args []string
+	if m.ChildModule == "" {
+		args = []string{
+			"dependency:tree",
+			"-f",
+			m.PomFile,
+			fmt.Sprintf("-Dscope=%s", m.Scope),
+		}
+	} else {
+		log.Info("Compiling project because Maven requires it when dealing with child modules :(")
+		args = []string{
+			"compile",
+			"dependency:tree",
+			"-f",
+			m.PomFile,
+			fmt.Sprintf("-Dscope=%s", m.Scope),
+			"-pl",
+			m.ChildModule,
+			"-am",
+		}
+	}
+
 	// Run dependency:tree tool
 	var out bytes.Buffer
-	cmd := exec.Command("mvn", "dependency:tree", "-f", m.PomFile)
+	cmd := exec.Command(m.MavenCommand, args...)
 	stdout, err := cmd.StdoutPipe()
 	scanner := bufio.NewScanner(stdout)
 	running := true
@@ -161,9 +183,12 @@ func (m *Maven) Analyze() models.Project {
 	}()
 
 	err = cmd.Run()
+
+	// Wait for the scanner to finish processing the output
 	for running {
 		time.Sleep(25 * time.Millisecond)
 	}
+
 	var output = out.String()
 	if err != nil {
 		m.describeError(output)

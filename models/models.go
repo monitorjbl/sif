@@ -4,6 +4,7 @@ type RootCtx struct {
 	LogLevel                      string
 	LargeDependencyThreshold      string
 	LargeDependencyThresholdBytes uint64
+	LargeDependenciesOnly         bool
 }
 
 type Dependency struct {
