@@ -217,9 +217,9 @@ func printResult(project models.Project) {
 			prefix := "├── "
 			if entry.Depth > 0 {
 				if len(stack) > 0 && stack[len(stack)-1].Depth == entry.Depth {
-					prefix = fmt.Sprintf("%s├── ", strings.Repeat("|    ", entry.Depth))
+					prefix = fmt.Sprintf("%s├── ", strings.Repeat("│    ", entry.Depth))
 				} else {
-					prefix = fmt.Sprintf("%s└── ", strings.Repeat("|    ", entry.Depth))
+					prefix = fmt.Sprintf("%s└── ", strings.Repeat("│    ", entry.Depth))
 				}
 			} else {
 				topLevelCount++
