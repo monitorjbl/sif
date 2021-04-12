@@ -1,3 +1,5 @@
 .idea
 sif
 sif-*
+dist
+dist/*

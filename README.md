@@ -44,12 +44,10 @@ Not supported yet
 ## Building sif
 
 ```shell
-# Compile for your specific platform
+# Compile for your specific platform (in project root)
 go mod download
-go build
+go scripts
 
-# Cross platform builds
-GOOS=darwin GOARCH=amd64 go build -o sif-darwin-x64
-GOOS=linux GOARCH=amd64 go build -o sif-linux-x64
-GOOS=windows GOARCH=amd64 go build -o sif-windows-x64.exe
+# Compile cross platform builds (in dist directory)
+./build.sh
 ```
