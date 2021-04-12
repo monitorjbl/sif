@@ -94,3 +94,9 @@ go scripts
 # Release (requires release-it tool)
 release-it
 ```
+
+# TODO
+
+* Support Gradle builds
+* Support NPM builds
+* Support multiple output formats
