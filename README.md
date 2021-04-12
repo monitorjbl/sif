@@ -13,11 +13,51 @@ Sif supports multiple kinds of builds and languages:
 * Gradle (planned)
 * NPM (planned)
 
-Sif can also be run on multiple platforms 
+Sif can also be run on multiple platforms
 
 * OSX
 * Linux (not tested)
 * Windows (not tested)
+
+# Installing
+
+You can download a release from the [Releases]() tabl, or you can run these shell commands to download the latest for
+you:
+
+**OSX**
+
+```shell
+curl -s https://api.github.com/repos/monitorjbl/sif/releases/latest \
+| grep "browser_download_url.*darwin-x64" \
+| cut -d : -f 2,3 \
+| tr -d \" \
+| xargs curl -L -o ./sif && chmod +x ./sif
+```
+
+**Linux**
+
+```shell
+curl -s https://api.github.com/repos/monitorjbl/sif/releases/latest \
+| grep "browser_download_url.*linux-x64" \
+| cut -d : -f 2,3 \
+| tr -d \" \
+| xargs curl -L -o ./sif && chmod +x ./sif
+```
+
+**Windows**
+
+```
+“¯\_(ツ)_/¯“
+
+(i dont know powershell very well)
+```
+
+# Running
+
+sif can support any build system that it can call externally and parse the result from.
+Just use the subcommand that corresponds to your project's build process.
+
+Currently, only Maven is supported, but more will be coming soon!
 
 ## Maven
 
@@ -41,7 +81,7 @@ Not supported yet
 
 Not supported yet
 
-## Building sif
+# Building
 
 ```shell
 # Compile for your specific platform (in project root)
