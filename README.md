@@ -13,11 +13,11 @@ Sif supports multiple kinds of builds and languages:
 * Gradle (planned)
 * NPM (planned)
 
-Sif can also be run on multiple platforms (not tested)
+Sif can also be run on multiple platforms 
 
 * OSX
-* Linux
-* Windows
+* Linux (not tested)
+* Windows (not tested)
 
 ## Maven
 
@@ -50,4 +50,7 @@ go scripts
 
 # Compile cross platform builds (in dist directory)
 ./build.sh
+
+# Release (requires release-it tool)
+release-it
 ```

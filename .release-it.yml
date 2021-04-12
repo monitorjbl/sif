@@ -2,9 +2,9 @@ git:
   commitMessage: "Release of v${version}"
   requireCleanWorkingDir: false
 github:
-  release: false
+  release: true
   releaseName: "v${version}"
   assets:
     - dist/sif-*
 hooks:
-  after:git:release: "VERSION=${version} ./scripts/build.sh"
+  before:git:release: "VERSION=${version} ./scripts/build.sh"
