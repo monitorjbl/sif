@@ -5,7 +5,7 @@
 [image source](https://www.deviantart.com/birchwing/art/Crossover-Homebrew-Sif-Dark-Souls-792426892)
 
 Protects you from ~~the abyss~~ dependency bloat by showing you where your largest dependencies are coming from. Large
-dependencies are highlighted for you and transitive are included.
+dependencies are highlighted for you and transitives are included.
 
 Sif supports multiple kinds of builds and languages:
 
