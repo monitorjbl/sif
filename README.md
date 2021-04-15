@@ -27,11 +27,13 @@ you:
 **OSX**
 
 ```shell
+mkdir -p ~/bin && \
 curl -s https://api.github.com/repos/monitorjbl/sif/releases/latest \
 | grep "browser_download_url.*darwin-x64" \
 | cut -d : -f 2,3 \
 | tr -d \" \
-| xargs curl -L -o ./sif && chmod +x ./sif
+| xargs curl -L -o ~/bin/sif &&\
+chmod +x ~/bin/sif
 ```
 
 **Linux**

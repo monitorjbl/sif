@@ -8,20 +8,17 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"path/filepath"
+	"sif/gradle"
 	"sif/maven"
 	"sif/models"
 	"strings"
 )
 
 var (
-	Version = "localdev"
-	rootCmd = &cobra.Command{
-		Use:     "sif",
-		Short:   "A dependency analyzer for software projects",
-		Version: Version,
-	}
-	rootCtx  = models.RootCtx{}
-	mavenCtx = maven.Maven{}
+	Version   = "localdev"
+	rootCtx   = models.RootCtx{}
+	mavenCtx  = maven.Maven{}
+	gradleCtx = gradle.Gradle{}
 )
 
 type AnalyzedDependency struct {
@@ -79,8 +76,13 @@ func processRootConfig() models.RootCtx {
 	return rootCtx
 }
 
-func init() {
+func initCli() *cobra.Command {
 	cobra.OnInitialize(initConfig)
+	rootCmd := &cobra.Command{
+		Use:     "sif",
+		Short:   "A dependency analyzer for software projects",
+		Version: Version,
+	}
 	rootCmd.PersistentFlags().StringVarP(&rootCtx.LogLevel,
 		"logging",
 		"",
@@ -97,7 +99,7 @@ func init() {
 		false,
 		"Only show dependency trees that exceed the threshold")
 
-	var mavenCmd = cobra.Command{
+	mavenCmd := cobra.Command{
 		Use:   "maven [options] path/to/pom.xml",
 		Short: "Analyzes a Maven project's dependencies",
 		Args:  cobra.MinimumNArgs(1),
@@ -131,8 +133,40 @@ func init() {
 		"child",
 		"",
 		"",
-		"Specifies a child module in a multi-module project")
+		"Specifies a child module in a multi-module project (defaults to none)")
 	rootCmd.AddCommand(&mavenCmd)
+
+	gradleCmd := cobra.Command{
+		Use:   "gradle [options] path/to/build.gradle",
+		Short: "Analyzes a Gradle project's dependencies",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) != 1 || args[0] == "help" {
+				cmd.Help()
+			} else {
+				gradleCtx.BuildGradleFile = resolvePath(args[0])
+				mavenCtx.RootCtx = processRootConfig()
+				printResult(gradleCtx.Analyze())
+			}
+		},
+	}
+	gradleCmd.PersistentFlags().StringVarP(&gradleCtx.GradleCommand,
+		"cmd",
+		"",
+		"",
+		"Path to Gradle command (defaults to searching)")
+	gradleCmd.PersistentFlags().StringVarP(&gradleCtx.Configuration,
+		"configuration",
+		"",
+		"runtimeClasspath",
+		"The dependency configuration to use")
+	gradleCmd.PersistentFlags().StringVarP(&gradleCtx.ChildModule,
+		"child",
+		"",
+		"",
+		"Specifies a child module in a multi-module project (defaults to none)")
+	rootCmd.AddCommand(&gradleCmd)
+	return rootCmd
 }
 
 func initConfig() {
@@ -275,5 +309,5 @@ func (*LogFormatter) Format(entry *log.Entry) ([]byte, error) {
 
 func main() {
 	log.SetFormatter(&LogFormatter{})
-	rootCmd.Execute()
+	initCli().Execute()
 }

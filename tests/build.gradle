@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+}
+
+version = "1.0.0"
+
+repositories {
+    mavenCentral()
+}
+
+wrapper {
+    gradleVersion = '6.7.1'
+    jarFile = file('.gradlew/wrapper.jar')
+}
+
+dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+    implementation group: 'info.picocli', name: 'picocli', version: '4.6.1'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-joda:2.12.1'
+
+    implementation group: 'org.apache.maven', name: 'maven-core', version: '3.6.3'
+    implementation group: 'org.apache.maven', name: 'maven-model', version: '3.6.3'
+    implementation group: 'org.eclipse.aether', name: 'aether-api', version: '1.1.0'
+    implementation group: 'org.eclipse.aether', name: 'aether-connector-basic', version: '1.1.0'
+    implementation group: 'org.eclipse.aether', name: 'aether-transport-http', version: '1.1.0'
+    implementation group: 'org.eclipse.aether', name: 'aether-transport-file', version: '1.1.0'
+
+    implementation group: 'org.apache.maven.plugins', name: 'maven-dependency-plugin', version: '3.1.2'
+}

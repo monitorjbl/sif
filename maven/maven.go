@@ -16,6 +16,7 @@ import (
 var (
 	regexProjectDetails    = regexp.MustCompile("\\[INFO\\] Building ([^\\s]+) ([^\\s]+)")
 	regexErrNonreadablePom = regexp.MustCompile(".* Non-readable POM.*")
+	regexErrReactorPom     = regexp.MustCompile(".*Reactor Build Order:.*")
 	dependencyRegex        = regexp.MustCompile("(\\|\\s\\s)*(\\+-|\\\\-) (.+)")
 )
 
@@ -30,10 +31,17 @@ type Maven struct {
 
 func (m *Maven) describeError(errMsg string) {
 	log.Tracef("Error message: %s", errMsg)
+	m.checkMultiModulePom(errMsg)
 	if regexErrNonreadablePom.MatchString(errMsg) {
 		log.Fatalf("POM was not found at %s", m.PomFile)
 	} else {
 		log.Fatalf("Unknown error encountered: %s", errMsg)
+	}
+}
+
+func (m *Maven) checkMultiModulePom(output string) {
+	if m.ChildModule == "" && regexErrReactorPom.MatchString(output) {
+		log.Fatalf("Multimodule POM detected with no selected child POM. Please select one with the --child option")
 	}
 }
 
@@ -128,20 +136,19 @@ func (m *Maven) parseOutputTree(output string) []models.Dependency {
 				dependencies = append(dependencies, m.parseMavenCoordinates(entry))
 			}
 		}
-
 	}
 
 	return dependencies
 }
 
 func (m *Maven) Analyze() models.Project {
-	log.Infof("Running Maven command (%s)", m.MavenCommand)
 	if m.RootCtx.LogLevel == "DEBUG" {
 		log.Debug("Logging Maven command output")
 	}
 
 	var args []string
 	if m.ChildModule == "" {
+		log.Infof("Running Maven command (%s)", m.MavenCommand)
 		args = []string{
 			"dependency:tree",
 			"-f",
@@ -149,7 +156,7 @@ func (m *Maven) Analyze() models.Project {
 			fmt.Sprintf("-Dscope=%s", m.Scope),
 		}
 	} else {
-		log.Info("Compiling project because Maven requires it when dealing with child modules :(")
+		log.Info("Compiling project. Maven requires this when dealing with child modules.")
 		args = []string{
 			"compile",
 			"dependency:tree",
@@ -191,12 +198,12 @@ func (m *Maven) Analyze() models.Project {
 
 	var output = out.String()
 	if err != nil {
+		log.Error(err)
 		m.describeError(output)
-		log.Fatal(err)
 	}
 
 	// Parse output
-	log.Infof("Parsing output")
+	m.checkMultiModulePom(output)
 	deps := m.parseOutputTree(output)
 	name, version := m.parseProjectDetails(output)
 	return models.Project{
